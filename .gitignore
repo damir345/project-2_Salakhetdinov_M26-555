@@ -1,5 +1,13 @@
 .DS_Store
- .venv
- dist/
- __pycache__/
- *.egg-info
+.venv
+dist/
+__pycache__/
+*.egg-info__pycache__/
+*.pyc
+.check-env/
+.demo-env/
+build/
+*.egg-info/
+data/
+db_meta.json
+*.cast
