@@ -1,7 +1,7 @@
 [project]
 name = "primitive-db"
 version = "0.1.0"
-description = "Add your description here"
+description = "Primitive DB — учебный модуль управления таблицами"
 readme = "README.md"
 authors = [
     { name = "Damir Salakhetdinov", email = "saldam@inbox.ru" }
@@ -12,11 +12,14 @@ dependencies = [
 ]
 
 [project.scripts]
-project = "primitive_db.main:main"
+database = "primitive_db.engine:run"
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 line-length = 88
