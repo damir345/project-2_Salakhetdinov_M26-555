@@ -2,6 +2,14 @@ import shlex
 import sys
 
 from . import core, parser
+from .constants import (
+    EXACT_ONE_ARG,
+    META_FILE,
+    MIN_CREATE_ARGS,
+    MIN_DELETE_ARGS,
+    MIN_SELECT_ARGS,
+    MIN_UPDATE_ARGS,
+)
 from .utils import (
     delete_table_data,
     load_metadata,
@@ -10,16 +18,9 @@ from .utils import (
     save_table_data,
 )
 
-DB_FILE = "db_meta.json"
-
-MIN_CREATE_ARGS = 3
-MIN_SELECT_ARGS = 3
-MIN_UPDATE_ARGS = 3
-MIN_DELETE_ARGS = 4
-EXACT_ONE_ARG = 2
-
 
 def print_help() -> None:
+    """Печатает справку по командам."""
     print("\n***Операции с данными***")
     print("Функции:")
     print(
@@ -46,6 +47,7 @@ def print_help() -> None:
 
 
 def parse_insert(user_input: str):
+    """Разбирает 'insert into T values (...)' на (table_name, values_str)."""
     tokens = user_input.split()
     if len(tokens) < 5:
         return None
@@ -63,6 +65,7 @@ def parse_insert(user_input: str):
 
 
 def split_by_token(tokens: list[str], keyword: str):
+    """Делит токены по keyword; возвращает (before, after)."""
     if keyword in tokens:
         idx = tokens.index(keyword)
         return tokens[:idx], tokens[idx + 1 :]
@@ -70,48 +73,53 @@ def split_by_token(tokens: list[str], keyword: str):
 
 
 def handle_create_table(user_input: str) -> None:
+    """Обрабатывает команду create_table."""
     parts = user_input.split()
     if len(parts) < MIN_CREATE_ARGS:
         print("Некорректное значение: недостаточно аргументов.")
         return
-    metadata = load_metadata(DB_FILE)
+    metadata = load_metadata(META_FILE)
     result = core.create_table(metadata, parts[1], parts[2:])
     if result is None:
         return
     metadata, ok = result
     if ok:
-        save_metadata(DB_FILE, metadata)
+        save_metadata(META_FILE, metadata)
 
 
 def handle_drop_table(user_input: str) -> None:
+    """Обрабатывает команду drop_table (с подтверждением)."""
     parts = user_input.split()
     if len(parts) != EXACT_ONE_ARG:
         print("Некорректное значение: drop_table требует одно имя.")
         return
-    metadata = load_metadata(DB_FILE)
+    metadata = load_metadata(META_FILE)
     result = core.drop_table(metadata, parts[1])
     if result is None:
         # отменено пользователем или перехвачена ошибка
         return
     metadata, ok = result
     if ok:
-        save_metadata(DB_FILE, metadata)
+        save_metadata(META_FILE, metadata)
         delete_table_data(parts[1])
 
 
 def handle_list_tables(_: str) -> None:
-    core.list_tables(load_metadata(DB_FILE))
+    """Обрабатывает команду list_tables."""
+    core.list_tables(load_metadata(META_FILE))
 
 
 def handle_info(user_input: str) -> None:
+    """Обрабатывает команду info."""
     parts = user_input.split()
     if len(parts) != EXACT_ONE_ARG:
         print("Некорректное значение: info требует одно имя таблицы.")
         return
-    core.info(load_metadata(DB_FILE), parts[1])
+    core.info(load_metadata(META_FILE), parts[1])
 
 
 def handle_insert(user_input: str) -> None:
+    """Обрабатывает команду insert."""
     parsed = parse_insert(user_input)
     if not parsed:
         print("Некорректное значение: неверный синтаксис insert.")
@@ -119,7 +127,7 @@ def handle_insert(user_input: str) -> None:
     table_name, values_str = parsed
     raw_values = parser.split_values(values_str)
     values = [parser.cast_value(v) for v in raw_values]
-    metadata = load_metadata(DB_FILE)
+    metadata = load_metadata(META_FILE)
     result = core.insert(metadata, table_name, values)
     if result is None:
         return
@@ -129,6 +137,7 @@ def handle_insert(user_input: str) -> None:
 
 
 def handle_select(user_input: str) -> None:
+    """Обрабатывает команду select (с where и без)."""
     tokens = shlex.split(user_input)
     if len(tokens) < MIN_SELECT_ARGS or tokens[1] != "from":
         print("Некорректное значение: неверный синтаксис select.")
@@ -141,7 +150,7 @@ def handle_select(user_input: str) -> None:
         if where_clause is None:
             print("Некорректное значение: неверное условие where.")
             return
-    if table_name not in load_metadata(DB_FILE):
+    if table_name not in load_metadata(META_FILE):
         print(f'Ошибка: Таблица "{table_name}" не существует.')
         return
     data = load_table_data(table_name)
@@ -152,6 +161,7 @@ def handle_select(user_input: str) -> None:
 
 
 def handle_update(user_input: str) -> None:
+    """Обрабатывает команду update."""
     tokens = shlex.split(user_input)
     if len(tokens) < MIN_UPDATE_ARGS:
         print("Некорректное значение: неверный синтаксис update.")
@@ -167,7 +177,7 @@ def handle_update(user_input: str) -> None:
     if set_clause is None or where_clause is None:
         print("Некорректное значение: неверный set или where.")
         return
-    if table_name not in load_metadata(DB_FILE):
+    if table_name not in load_metadata(META_FILE):
         print(f'Ошибка: Таблица "{table_name}" не существует.')
         return
     data = load_table_data(table_name)
@@ -180,6 +190,7 @@ def handle_update(user_input: str) -> None:
 
 
 def handle_delete(user_input: str) -> None:
+    """Обрабатывает команду delete (с подтверждением)."""
     tokens = shlex.split(user_input)
     if len(tokens) < MIN_DELETE_ARGS or tokens[1] != "from":
         print("Некорректное значение: неверный синтаксис delete.")
@@ -190,7 +201,7 @@ def handle_delete(user_input: str) -> None:
     if where_clause is None:
         print("Некорректное значение: delete требует where col = val.")
         return
-    if table_name not in load_metadata(DB_FILE):
+    if table_name not in load_metadata(META_FILE):
         print(f'Ошибка: Таблица "{table_name}" не существует.')
         return
     data = load_table_data(table_name)
@@ -236,6 +247,7 @@ def dispatch(user_input: str) -> bool:
 
 
 def run() -> None:
+    """Главный цикл программы."""
     print("***База данных***")
     print_help()
 

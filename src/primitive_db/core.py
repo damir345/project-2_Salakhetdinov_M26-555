@@ -2,6 +2,7 @@ from typing import Dict, List, Tuple
 
 from prettytable import PrettyTable
 
+from .constants import VALID_TYPES
 from .decorators import (
     confirm_action,
     create_cacher,
@@ -9,8 +10,6 @@ from .decorators import (
     log_time,
 )
 from .utils import load_table_data
-
-ALLOWED_TYPES = {"int", "str", "bool"}
 
 # Кэш для select: ключ — хэш содержимого данных + where_clause
 _select_cache = create_cacher()
@@ -20,12 +19,12 @@ _select_cache = create_cacher()
 
 
 def _validate_columns(columns: List[str]) -> None:
-    """Бросает ValueError при некорректной схеме столбцов."""
+    """Проверяет схему столбцов; бросает ValueError при ошибке."""
     for col in columns:
         if ":" not in col:
             raise ValueError(f"Некорректное значение: {col}. Ожидается column:type")
         _, col_type = col.split(":", 1)
-        if col_type not in ALLOWED_TYPES:
+        if col_type not in VALID_TYPES:
             raise ValueError(
                 f"Некорректное значение: {col_type}. Доступно: int, str, bool"
             )
@@ -55,6 +54,7 @@ def _validate_values(columns_schema: list[dict], values: list) -> None:
 def create_table(
     metadata: Dict, table_name: str, columns: List[str]
 ) -> Tuple[Dict, bool]:
+    """Создаёт таблицу с автоматическим ID:int; возвращает (metadata, ok)."""
     if table_name in metadata:
         print(f'Ошибка: Таблица "{table_name}" уже существует.')
         return metadata, False
@@ -75,6 +75,7 @@ def create_table(
 @handle_db_errors
 @confirm_action("удаление таблицы")
 def drop_table(metadata: Dict, table_name: str) -> Tuple[Dict, bool]:
+    """Удаляет таблицу; возвращает (metadata, ok)."""
     if table_name not in metadata:
         print(f'Ошибка: Таблица "{table_name}" не существует.')
         return metadata, False
@@ -84,6 +85,7 @@ def drop_table(metadata: Dict, table_name: str) -> Tuple[Dict, bool]:
 
 
 def list_tables(metadata: Dict) -> None:
+    """Печатает список таблиц."""
     if not metadata:
         print("Таблиц нет.")
         return
@@ -97,6 +99,7 @@ def list_tables(metadata: Dict) -> None:
 @handle_db_errors
 @log_time
 def insert(metadata: dict, table_name: str, values: list) -> Tuple[list, bool]:
+    """Добавляет запись с автоинкрементным ID; возвращает (data, ok)."""
     if table_name not in metadata:
         raise KeyError(f'"{table_name}"')
 
@@ -124,6 +127,7 @@ def _make_select_key(table_data: list, where_clause: dict | None) -> tuple:
 
 
 def _do_select(table_data: list, where_clause: dict | None) -> list:
+    """Фильтрует записи по where_clause (без кэша)."""
     if where_clause is None:
         return table_data
     return [
@@ -136,6 +140,7 @@ def _do_select(table_data: list, where_clause: dict | None) -> list:
 @handle_db_errors
 @log_time
 def select(table_data: list, where_clause: dict | None = None) -> list:
+    """Возвращает записи по условию; результат кэшируется."""
     key = _make_select_key(table_data, where_clause)
     return _select_cache(key, lambda: _do_select(table_data, where_clause))
 
@@ -147,6 +152,7 @@ def update(
     set_clause: dict,
     where_clause: dict,
 ) -> Tuple[list, bool]:
+    """Обновляет записи по where_clause; возвращает (data, ok)."""
     updated_ids = []
     for row in table_data:
         if all(row.get(k) == v for k, v in where_clause.items()):
@@ -169,6 +175,7 @@ def delete(
     table_data: list,
     where_clause: dict,
 ) -> Tuple[list, bool]:
+    """Удаляет записи по where_clause; возвращает (data, ok)."""
     remaining, deleted_ids = [], []
     for row in table_data:
         if all(row.get(k) == v for k, v in where_clause.items()):
@@ -189,6 +196,7 @@ def delete(
 
 
 def print_table(rows: list) -> None:
+    """Печатает список словарей через PrettyTable."""
     if not rows:
         print("(нет записей)")
         return
@@ -201,6 +209,7 @@ def print_table(rows: list) -> None:
 
 @handle_db_errors
 def info(metadata: dict, table_name: str) -> None:
+    """Печатает схему таблицы и количество записей."""
     if table_name not in metadata:
         raise KeyError(f'"{table_name}"')
     schema = metadata[table_name]["columns"]

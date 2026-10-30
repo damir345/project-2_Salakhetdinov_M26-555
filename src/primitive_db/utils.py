@@ -1,10 +1,11 @@
 import json
-from pathlib import Path
+import os
 
-DATA_DIR = Path("data")
+from .constants import DATA_DIR
 
 
 def load_metadata(filepath: str) -> dict:
+    """Загружает метаданные из JSON-файла. Если файла нет — {}."""
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -13,14 +14,15 @@ def load_metadata(filepath: str) -> dict:
 
 
 def save_metadata(filepath: str, data: dict) -> None:
-    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+    """Сохраняет метаданные в JSON-файл."""
+    os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def load_table_data(table_name: str) -> list:
     """Загружает данные таблицы из data/<table_name>.json."""
-    filepath = DATA_DIR / f"{table_name}.json"
+    filepath = os.path.join(DATA_DIR, f"{table_name}.json")
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -29,14 +31,15 @@ def load_table_data(table_name: str) -> list:
 
 
 def save_table_data(table_name: str, data: list) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    filepath = DATA_DIR / f"{table_name}.json"
+    """Сохраняет данные таблицы в data/<table_name>.json."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    filepath = os.path.join(DATA_DIR, f"{table_name}.json")
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def delete_table_data(table_name: str) -> None:
-    """Удаляет файл данных при drop_table."""
-    filepath = DATA_DIR / f"{table_name}.json"
-    if filepath.exists():
-        filepath.unlink()
+    """Удаляет файл данных таблицы."""
+    filepath = os.path.join(DATA_DIR, f"{table_name}.json")
+    if os.path.exists(filepath):
+        os.remove(filepath)

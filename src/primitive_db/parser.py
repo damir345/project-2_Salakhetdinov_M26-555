@@ -3,6 +3,7 @@ from typing import Optional
 
 
 def cast_value(raw: str):
+    """Приводит строку к int/bool/str; снимает обрамляющие кавычки."""
     raw = raw.strip()
     if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ('"', "'"):
         raw = raw[1:-1]
@@ -18,12 +19,14 @@ def cast_value(raw: str):
 
 
 def parse_condition(tokens: list[str]) -> Optional[dict]:
+    """Разбирает ['col', '=', 'val'] в {'col': val}."""
     if len(tokens) != 3 or tokens[1] != "=":
         return None
     return {tokens[0]: cast_value(tokens[2])}
 
 
 def parse_set_clause(tokens: list[str]) -> Optional[dict]:
+    """Разбирает ['col1', '=', 'v1', ...] в {'col1': v1, ...}."""
     if not tokens or len(tokens) % 3 != 0:
         return None
     result = {}
@@ -33,13 +36,6 @@ def parse_set_clause(tokens: list[str]) -> Optional[dict]:
             return None
         result[col] = cast_value(val)
     return result
-
-
-def find_where(tokens: list[str]) -> tuple[list[str], list[str]]:
-    if "where" in tokens:
-        idx = tokens.index("where")
-        return tokens[:idx], tokens[idx + 1 :]
-    return tokens, []
 
 
 def split_values(values_str: str) -> list[str]:

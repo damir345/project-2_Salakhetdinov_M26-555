@@ -1,7 +1,7 @@
 [project]
 name = "primitive-db"
 version = "0.1.0"
-description = "Primitive DB — учебный модуль управления таблицами"
+description = "Primitive DB — учебный модуль управления таблицами с CRUD и декораторами"
 readme = "README.md"
 authors = [
     { name = "Damir Salakhetdinov", email = "saldam@inbox.ru" }
@@ -19,13 +19,14 @@ database = "primitive_db.engine:run"
 requires = ["uv_build>=0.13.6,<0.14.0"]
 build-backend = "uv_build"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.uv.build-backend]
+module-name = "primitive_db"
+module-root = "src"
 
 [tool.ruff]
 line-length = 88
 target-version = "py312"
-exclude = ["venv", ".venv", "dist", "__pycache__"]
+exclude = ["venv", ".venv", "dist", "build", "__pycache__"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
