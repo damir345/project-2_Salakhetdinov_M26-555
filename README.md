@@ -1,5 +1,52 @@
 # project-2_Salakhetdinov_M26-555
-Домашнее задание №2. Примитивная база данных
+
+Учебная примитивная база данных на Python: управление таблицами, CRUD-операции,
+хранение данных в JSON, вывод через PrettyTable, декораторы для обработки ошибок,
+подтверждения опасных операций, замера времени и кэширования.
+
+## Установка
+
+```bash
+uv sync
+```
+
+## Запуск
+
+```bash
+make run
+```
+
+Альтернатива без `make`:
+
+```bash
+uv run database
+```
+
+## Структура проекта
+
+```
+src/primitive_db/
+├── main.py          # точка входа
+├── engine.py        # главный цикл, парсинг команд, вызовы core
+├── core.py          # бизнес-логика: таблицы и CRUD
+├── utils.py         # чтение/запись JSON (метаданные и данные таблиц)
+├── parser.py        # разбор where / set / values
+├── decorators.py    # handle_db_errors, confirm_action, log_time, create_cacher
+└── constants.py     # META_FILE, DATA_DIR, VALID_TYPES, MIN_*_ARGS
+```
+
+## Линтер
+
+```bash
+make lint
+```
+
+Альтернатива:
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+```
 
 ## Управление таблицами
 
@@ -125,3 +172,7 @@ https://asciinema.org/a/y9mwtcD2Zd9fCC62
 ## 3-e Демо работы (В проекте реализованы декораторы)
 
 https://asciinema.org/a/hmn0JDNiL2YAuZ4m
+
+## Финальное Демо работы (Тестирование и завершение проекта)
+
+https://asciinema.org/a/T114lEE93gsQbwRK
