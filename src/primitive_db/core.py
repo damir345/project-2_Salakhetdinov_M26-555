@@ -2,21 +2,56 @@ from typing import Dict, List, Tuple
 
 from prettytable import PrettyTable
 
+from .decorators import (
+    confirm_action,
+    create_cacher,
+    handle_db_errors,
+    log_time,
+)
 from .utils import load_table_data
 
 ALLOWED_TYPES = {"int", "str", "bool"}
 
+# Кэш для select: ключ — хэш содержимого данных + where_clause
+_select_cache = create_cacher()
 
-def _validate_columns(columns: List[str]) -> Tuple[bool, str]:
+
+# ---------- Валидация ----------
+
+
+def _validate_columns(columns: List[str]) -> None:
+    """Бросает ValueError при некорректной схеме столбцов."""
     for col in columns:
         if ":" not in col:
-            return False, f"Некорректное значение: {col}. Ожидается column:type"
+            raise ValueError(f"Некорректное значение: {col}. Ожидается column:type")
         _, col_type = col.split(":", 1)
         if col_type not in ALLOWED_TYPES:
-            return False, f"Некорректное значение: {col_type}. Доступно: int, str, bool"
-    return True, ""
+            raise ValueError(
+                f"Некорректное значение: {col_type}. Доступно: int, str, bool"
+            )
 
 
+def _validate_values(columns_schema: list[dict], values: list) -> None:
+    """Бросает ValueError, если значения не соответствуют схеме (без ID)."""
+    expected = [c for c in columns_schema if c["name"] != "ID"]
+    if len(values) != len(expected):
+        raise ValueError(
+            f"Некорректное значение: ожидалось {len(expected)} значений, "
+            f"получено {len(values)}."
+        )
+    for col, val in zip(expected, values):
+        if col["type"] == "bool" and not isinstance(val, bool):
+            raise ValueError(f"Некорректное значение: {val} не bool для {col['name']}.")
+        if col["type"] == "int" and (not isinstance(val, int) or isinstance(val, bool)):
+            raise ValueError(f"Некорректное значение: {val} не int для {col['name']}.")
+        if col["type"] == "str" and not isinstance(val, str):
+            raise ValueError(f"Некорректное значение: {val} не str для {col['name']}.")
+
+
+# ---------- Управление таблицами ----------
+
+
+@handle_db_errors
 def create_table(
     metadata: Dict, table_name: str, columns: List[str]
 ) -> Tuple[Dict, bool]:
@@ -24,10 +59,7 @@ def create_table(
         print(f'Ошибка: Таблица "{table_name}" уже существует.')
         return metadata, False
 
-    ok, err = _validate_columns(columns)
-    if not ok:
-        print(err)
-        return metadata, False
+    _validate_columns(columns)
 
     full_columns = ["ID:int"] + columns
     metadata[table_name] = {
@@ -40,6 +72,8 @@ def create_table(
     return metadata, True
 
 
+@handle_db_errors
+@confirm_action("удаление таблицы")
 def drop_table(metadata: Dict, table_name: str) -> Tuple[Dict, bool]:
     if table_name not in metadata:
         print(f'Ошибка: Таблица "{table_name}" не существует.')
@@ -57,38 +91,17 @@ def list_tables(metadata: Dict) -> None:
         print(f"- {name}")
 
 
-def _validate_values(columns_schema: list[dict], values: list) -> tuple[bool, str]:
-    expected = [c for c in columns_schema if c["name"] != "ID"]
-    if len(values) != len(expected):
-        return (
-            False,
-            f"Некорректное значение: ожидалось {len(expected)} значений, "
-            f"получено {len(values)}.",
-        )
-    for col, val in zip(expected, values):
-        if col["type"] == "bool":
-            if not isinstance(val, bool):
-                return False, f"Некорректное значение: {val} не bool для {col['name']}."
-        elif col["type"] == "int":
-            if not isinstance(val, int) or isinstance(val, bool):
-                return False, f"Некорректное значение: {val} не int для {col['name']}."
-        elif col["type"] == "str":
-            if not isinstance(val, str):
-                return False, f"Некорректное значение: {val} не str для {col['name']}."
-    return True, ""
+# ---------- CRUD ----------
 
 
+@handle_db_errors
+@log_time
 def insert(metadata: dict, table_name: str, values: list) -> Tuple[list, bool]:
-    """Вставляет запись. values — уже приведённые типы, без ID."""
     if table_name not in metadata:
-        print(f'Ошибка: Таблица "{table_name}" не существует.')
-        return [], False
+        raise KeyError(f'"{table_name}"')
 
     schema = metadata[table_name]["columns"]
-    ok, err = _validate_values(schema, values)
-    if not ok:
-        print(err)
-        return [], False
+    _validate_values(schema, values)
 
     data = load_table_data(table_name)
     new_id = max((row["ID"] for row in data), default=0) + 1
@@ -103,7 +116,14 @@ def insert(metadata: dict, table_name: str, values: list) -> Tuple[list, bool]:
     return data, True
 
 
-def select(table_data: list, where_clause: dict | None = None) -> list:
+def _make_select_key(table_data: list, where_clause: dict | None) -> tuple:
+    """Хэшируемый ключ для кэша: содержимое данных + where_clause."""
+    rows_key = tuple(tuple(sorted(row.items())) for row in table_data)
+    where_key = tuple(sorted((where_clause or {}).items()))
+    return rows_key, where_key
+
+
+def _do_select(table_data: list, where_clause: dict | None) -> list:
     if where_clause is None:
         return table_data
     return [
@@ -113,6 +133,14 @@ def select(table_data: list, where_clause: dict | None = None) -> list:
     ]
 
 
+@handle_db_errors
+@log_time
+def select(table_data: list, where_clause: dict | None = None) -> list:
+    key = _make_select_key(table_data, where_clause)
+    return _select_cache(key, lambda: _do_select(table_data, where_clause))
+
+
+@handle_db_errors
 def update(
     table_name: str,
     table_data: list,
@@ -134,6 +162,8 @@ def update(
     return table_data, True
 
 
+@handle_db_errors
+@confirm_action("удаление записей")
 def delete(
     table_name: str,
     table_data: list,
@@ -155,6 +185,9 @@ def delete(
     return remaining, True
 
 
+# ---------- Вывод ----------
+
+
 def print_table(rows: list) -> None:
     if not rows:
         print("(нет записей)")
@@ -166,10 +199,10 @@ def print_table(rows: list) -> None:
     print(table)
 
 
+@handle_db_errors
 def info(metadata: dict, table_name: str) -> None:
     if table_name not in metadata:
-        print(f'Ошибка: Таблица "{table_name}" не существует.')
-        return
+        raise KeyError(f'"{table_name}"')
     schema = metadata[table_name]["columns"]
     cols_str = ", ".join(f"{c['name']}:{c['type']}" for c in schema)
     data = load_table_data(table_name)

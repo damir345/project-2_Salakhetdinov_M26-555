@@ -12,7 +12,6 @@ from .utils import (
 
 DB_FILE = "db_meta.json"
 
-# Минимальные длины токенов для разных команд
 MIN_CREATE_ARGS = 3
 MIN_SELECT_ARGS = 3
 MIN_UPDATE_ARGS = 3
@@ -56,7 +55,6 @@ def parse_insert(user_input: str):
         return None
     table_name = tokens[2]
 
-    # всё, что после 'values', включая скобки
     rest = user_input.split("values", 1)[1].strip()
     if not (rest.startswith("(") and rest.endswith(")")):
         return None
@@ -77,7 +75,10 @@ def handle_create_table(user_input: str) -> None:
         print("Некорректное значение: недостаточно аргументов.")
         return
     metadata = load_metadata(DB_FILE)
-    metadata, ok = core.create_table(metadata, parts[1], parts[2:])
+    result = core.create_table(metadata, parts[1], parts[2:])
+    if result is None:
+        return
+    metadata, ok = result
     if ok:
         save_metadata(DB_FILE, metadata)
 
@@ -88,7 +89,11 @@ def handle_drop_table(user_input: str) -> None:
         print("Некорректное значение: drop_table требует одно имя.")
         return
     metadata = load_metadata(DB_FILE)
-    metadata, ok = core.drop_table(metadata, parts[1])
+    result = core.drop_table(metadata, parts[1])
+    if result is None:
+        # отменено пользователем или перехвачена ошибка
+        return
+    metadata, ok = result
     if ok:
         save_metadata(DB_FILE, metadata)
         delete_table_data(parts[1])
@@ -115,7 +120,10 @@ def handle_insert(user_input: str) -> None:
     raw_values = parser.split_values(values_str)
     values = [parser.cast_value(v) for v in raw_values]
     metadata = load_metadata(DB_FILE)
-    data, ok = core.insert(metadata, table_name, values)
+    result = core.insert(metadata, table_name, values)
+    if result is None:
+        return
+    data, ok = result
     if ok:
         save_table_data(table_name, data)
 
@@ -138,6 +146,8 @@ def handle_select(user_input: str) -> None:
         return
     data = load_table_data(table_name)
     rows = core.select(data, where_clause)
+    if rows is None:
+        return
     core.print_table(rows)
 
 
@@ -161,7 +171,10 @@ def handle_update(user_input: str) -> None:
         print(f'Ошибка: Таблица "{table_name}" не существует.')
         return
     data = load_table_data(table_name)
-    data, ok = core.update(table_name, data, set_clause, where_clause)
+    result = core.update(table_name, data, set_clause, where_clause)
+    if result is None:
+        return
+    data, ok = result
     if ok:
         save_table_data(table_name, data)
 
@@ -181,7 +194,10 @@ def handle_delete(user_input: str) -> None:
         print(f'Ошибка: Таблица "{table_name}" не существует.')
         return
     data = load_table_data(table_name)
-    data, ok = core.delete(table_name, data, where_clause)
+    result = core.delete(table_name, data, where_clause)
+    if result is None:
+        return
+    data, ok = result
     if ok:
         save_table_data(table_name, data)
 
